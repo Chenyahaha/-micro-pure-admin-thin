@@ -1,15 +1,27 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { IconDown, IconUp } from '@arco-design/web-vue/es/icon';
 import { PageModal } from '@xingjia/ui';
 import { useCrud } from './useCrud';
 import { payStatusOptions } from './config';
 import PurchaseOrderForm from './form.vue';
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import type { PurchaseOrderTableRow } from './data';
 import { flattenBatches, sumQty, sumAmount } from './data';
 
-const COL_COUNT = 13;
-
 const { tableData, filteredBatches, searchKeyword, searchPayStatus, modalVisible, modalMode, formData, handleAdd, handleEditBatch, handleEditFromLine, handleDeleteBatch, handleDeleteLine, handleSave } = useCrud();
+
+const expandedBatchIds = ref<Set<string>>(new Set());
+
+function toggleExpand(batchId: string) {
+    const next = new Set(expandedBatchIds.value);
+    if (next.has(batchId)) {
+        next.delete(batchId);
+    } else {
+        next.add(batchId);
+    }
+    expandedBatchIds.value = next;
+}
 
 const formRef = ref<InstanceType<typeof PurchaseOrderForm>>();
 
@@ -31,13 +43,42 @@ const pagedBatches = computed(() => {
     return list.slice(start, start + pageSize.value);
 });
 
-const flatTableData = computed(() => flattenBatches(pagedBatches.value));
+const flatTableData = computed(() => flattenBatches(pagedBatches.value, expandedBatchIds.value));
+
+const configurableColumns = [
+    { key: 'no', label: '子单号' },
+    { key: 'image', label: '图片' },
+    { key: 'sku', label: 'SKU' },
+    { key: 'productName', label: '产品' },
+    { key: 'store', label: '店铺' },
+    { key: 'country', label: '国家/地区' },
+    { key: 'warehouse', label: '仓库' },
+    { key: 'qty', label: '数量' },
+    { key: 'amount', label: '金额' },
+    { key: 'status', label: '订单状态' },
+    { key: 'payStatus', label: '付款状态' }
+];
+
+const columnConfig = ref(configurableColumns.map(item => ({ key: item.key } as { key: string; fixed?: 'left' | 'right' })));
+const orderedVisibleColumns = computed(() =>
+    columnConfig.value
+        .map(item => {
+            const col = configurableColumns.find(c => c.key === item.key);
+            return col ? { ...col, fixed: item.fixed } : null;
+        })
+        .filter(Boolean) as (typeof configurableColumns[number] & { fixed?: 'left' | 'right' })[]
+);
+const tableColumnCount = computed(() => orderedVisibleColumns.value.length + 2);
 
 function spanMethod({ record, columnIndex }: { record: Record<string, unknown>; columnIndex: number }) {
     const r = record as unknown as PurchaseOrderTableRow;
     if (r.rowType === 'parent') {
-        if (columnIndex === 0) return { rowspan: 1, colspan: COL_COUNT - 1 };
-        if (columnIndex === COL_COUNT - 1) return { rowspan: 1, colspan: 1 };
+        if (columnIndex === 0) return { rowspan: 1, colspan: tableColumnCount.value - 1 };
+        if (columnIndex === tableColumnCount.value - 1) return { rowspan: 1, colspan: 1 };
+        return { rowspan: 0, colspan: 0 };
+    }
+    if (r.rowType === 'expand' || r.rowType === 'collapse') {
+        if (columnIndex === 0) return { rowspan: 1, colspan: tableColumnCount.value };
         return { rowspan: 0, colspan: 0 };
     }
     return { rowspan: 1, colspan: 1 };
@@ -81,7 +122,9 @@ const pageSummary = computed(() => {
 
 function rowClassName(record: unknown) {
     const r = record as PurchaseOrderTableRow;
-    return r.rowType === 'parent' ? 'po-row-parent' : 'po-row-child';
+    if (r.rowType === 'parent') return 'po-row-parent';
+    if (r.rowType === 'expand' || r.rowType === 'collapse') return 'po-row-expand';
+    return 'po-row-child';
 }
 
 async function onSave() {
@@ -163,7 +206,10 @@ function shortName(name: string) {
                     <a-input-search v-model="searchKeyword" placeholder="搜索批次号 / 供应商 / SKU / 产品名" allow-clear style="width: 260px" />
                     <a-select v-model="searchPayStatus" :options="payStatusOptions" placeholder="付款状态" allow-clear style="width: 120px" />
                 </a-space>
-                <a-button type="primary" @click="handleAdd">新增采购订单</a-button>
+                <a-space>
+                    <TableColumnConfigDrawer v-model="columnConfig" :options="configurableColumns" />
+                    <a-button type="primary" @click="handleAdd">新增采购订单</a-button>
+                </a-space>
             </div>
 
             <div class="table-inner">
@@ -194,100 +240,43 @@ function shortName(name: string) {
                                         </div>
                                     </div>
                                 </template>
+                                <template v-else-if="record.rowType === 'expand'">
+                                    <div class="expand-row">
+                                        <a-link @click="toggleExpand(record.batch.id)">
+                                            <IconDown />
+                                            展开查看更多（还有 {{ record.hiddenCount }} 条SKU）
+                                        </a-link>
+                                    </div>
+                                </template>
+                                <template v-else-if="record.rowType === 'collapse'">
+                                    <div class="expand-row">
+                                        <a-link @click="toggleExpand(record.batch.id)">
+                                            <IconUp />
+                                            收起（共 {{ record.totalCount }} 条SKU）
+                                        </a-link>
+                                    </div>
+                                </template>
                                 <a-checkbox v-else />
                             </template>
                         </a-table-column>
 
-                        <a-table-column title="子单号" data-index="no" :width="200" fixed="left">
+                        <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :width="col.key === 'no' ? 200 : col.key === 'image' ? 72 : col.key === 'store' ? 150 : col.key === 'country' ? 100 : col.key === 'warehouse' ? 112 : col.key === 'qty' ? 72 : col.key === 'amount' ? 150 : col.key === 'status' ? 92 : col.key === 'payStatus' ? 92 : undefined" :min-width="col.key === 'sku' || col.key === 'productName' ? 220 : undefined" :align="col.key === 'image' || col.key === 'status' || col.key === 'payStatus' ? 'center' : col.key === 'qty' || col.key === 'amount' ? 'right' : undefined" :fixed="col.fixed || undefined">
                             <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'" class="cell-strong">{{ record.line.no }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="图片" :width="72" align="center">
-                            <template #cell="{ record }">
-                                <div v-if="record.rowType === 'child'" class="thumb-wrap"></div>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="SKU" :min-width="220">
-                            <template #cell="{ record }">
-                                <div v-if="record.rowType === 'child'" class="product-cell">
+                                <span v-if="col.key === 'no' && record.rowType === 'child'" class="cell-strong">{{ record.line.no }}</span>
+                                <div v-else-if="col.key === 'image' && record.rowType === 'child'" class="thumb-wrap"></div>
+                                <div v-else-if="col.key === 'sku' && record.rowType === 'child'" class="product-cell">
                                     <a-link class="sku-link">{{ record.line.sku }}</a-link>
                                 </div>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="产品" :min-width="220">
-                            <template #cell="{ record }">
-                                <div v-if="record.rowType === 'child'" class="product-cell">
+                                <div v-else-if="col.key === 'productName' && record.rowType === 'child'" class="product-cell">
                                     <div class="product-title">{{ record.line.productName }}</div>
                                 </div>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="店铺" data-index="store" :width="150">
-                            <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'">{{ record.line.store || '—' }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="国家/地区" :width="100">
-                            <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'">{{ record.line.country || '—' }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="仓库" data-index="warehouse" :width="112">
-                            <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'">{{ record.line.warehouse }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="数量" :width="72" align="right">
-                            <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'" class="num">{{ record.line.qty }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="金额" :width="150" align="right">
-                            <template #cell="{ record }">
-                                <span v-if="record.rowType === 'child'" class="cell-amount">{{ formatAmount(record.line.amount) }}</span>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="订单状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="statusColor(record.line.status)" size="small">{{ record.line.status }}</a-tag>
-                            </template>
-                        </a-table-column>
-
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
-                            </template>
-                        </a-table-column>
-                        <a-table-column title="付款状态" :width="92" align="center">
-                            <template #cell="{ record }">
-                                <a-tag v-if="record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
+                                <span v-else-if="col.key === 'store' && record.rowType === 'child'">{{ record.line.store || '—' }}</span>
+                                <span v-else-if="col.key === 'country' && record.rowType === 'child'">{{ record.line.country || '—' }}</span>
+                                <span v-else-if="col.key === 'warehouse' && record.rowType === 'child'">{{ record.line.warehouse }}</span>
+                                <span v-else-if="col.key === 'qty' && record.rowType === 'child'" class="num">{{ record.line.qty }}</span>
+                                <span v-else-if="col.key === 'amount' && record.rowType === 'child'" class="cell-amount">{{ formatAmount(record.line.amount) }}</span>
+                                <a-tag v-else-if="col.key === 'status' && record.rowType === 'child'" :color="statusColor(record.line.status)" size="small">{{ record.line.status }}</a-tag>
+                                <a-tag v-else-if="col.key === 'payStatus' && record.rowType === 'child'" :color="payStatusColor(record.line.payStatus)" size="small">{{ record.line.payStatus }}</a-tag>
                             </template>
                         </a-table-column>
                         <a-table-column title="操作" :width="150" align="center" fixed="right">
@@ -491,6 +480,23 @@ function shortName(name: string) {
 /* 子行（明细行）：白色背景 */
 .table-inner :deep(.po-row-child .arco-table-td) {
     background: #ffffff !important;
+}
+
+/* 展开/收起行：浅灰底色，最小行高 */
+.table-inner :deep(.po-row-expand) {
+    height: 28px !important;
+}
+.table-inner :deep(.po-row-expand .arco-table-td) {
+    background: #fafbfc !important;
+    padding: 0 8px !important;
+}
+
+/* 展开/收起链接容器 */
+.expand-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
 }
 
 /* ========== 父行内部布局 ========== */

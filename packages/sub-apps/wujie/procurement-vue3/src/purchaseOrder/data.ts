@@ -40,9 +40,13 @@ export type PurchaseOrderTableRow =
       rowType: "child";
       batch: PurchaseOrderBatch;
       line: PurchaseOrderLine;
-    };
+    }
+  | { key: string; rowType: "expand"; batch: PurchaseOrderBatch; hiddenCount: number }
+  | { key: string; rowType: "collapse"; batch: PurchaseOrderBatch; totalCount: number };
 
-export function flattenBatches(batches: PurchaseOrderBatch[]): PurchaseOrderTableRow[] {
+const VISIBLE_SKU_LIMIT = 5;
+
+export function flattenBatches(batches: PurchaseOrderBatch[], expandedIds: Set<string> = new Set()): PurchaseOrderTableRow[] {
   const rows: PurchaseOrderTableRow[] = [];
   for (const batch of batches) {
     rows.push({
@@ -50,12 +54,34 @@ export function flattenBatches(batches: PurchaseOrderBatch[]): PurchaseOrderTabl
       rowType: "parent",
       batch
     });
-    for (const line of batch.children) {
+    const children = batch.children;
+    const isExpanded = expandedIds.has(batch.id);
+    const visibleLines = isExpanded ? children : children.slice(0, VISIBLE_SKU_LIMIT);
+
+    for (const line of visibleLines) {
       rows.push({
         key: `child-${batch.id}-${line.id}`,
         rowType: "child",
         batch,
         line
+      });
+    }
+
+    if (!isExpanded && children.length > VISIBLE_SKU_LIMIT) {
+      rows.push({
+        key: `expand-${batch.id}`,
+        rowType: "expand",
+        batch,
+        hiddenCount: children.length - VISIBLE_SKU_LIMIT
+      });
+    }
+
+    if (isExpanded && children.length > VISIBLE_SKU_LIMIT) {
+      rows.push({
+        key: `collapse-${batch.id}`,
+        rowType: "collapse",
+        batch,
+        totalCount: children.length
       });
     }
   }
@@ -173,6 +199,71 @@ export const purchaseOrderBatches: PurchaseOrderBatch[] = [
         amount: 9800,
         status: "已下单",
         payStatus: "已付款"
+      },
+      {
+        id: "b2-l4",
+        no: "PO-202604-002-D",
+        productName: "USB集线器 4口",
+        sku: "SKU-HB-104",
+        store: "Shopify-UK",
+        country: "英国",
+        warehouse: "东莞仓",
+        qty: 800,
+        amount: 15200,
+        status: "待审核",
+        payStatus: "未付款"
+      },
+      {
+        id: "b2-l5",
+        no: "PO-202604-002-E",
+        productName: "笔记本散热底座",
+        sku: "SKU-CO-105",
+        store: "eBay-DE",
+        country: "德国",
+        warehouse: "东莞仓",
+        qty: 300,
+        amount: 12600,
+        status: "已下单",
+        payStatus: "部分付款"
+      },
+      {
+        id: "b2-l6",
+        no: "PO-202604-002-F",
+        productName: "无线鼠标接收器",
+        sku: "SKU-RV-106",
+        store: "Shopify-UK",
+        country: "英国",
+        warehouse: "东莞仓",
+        qty: 2000,
+        amount: 10000,
+        status: "待审核",
+        payStatus: "未付款"
+      },
+      {
+        id: "b2-l7",
+        no: "PO-202604-002-G",
+        productName: "桌面条码打印机",
+        sku: "SKU-PR-107",
+        store: "eBay-DE",
+        country: "德国",
+        warehouse: "东莞仓",
+        qty: 50,
+        amount: 37500,
+        status: "已下单",
+        payStatus: "已付款"
+      },
+      {
+        id: "b2-l8",
+        no: "PO-202604-002-H",
+        productName: "人体工学鼠标垫",
+        sku: "SKU-PM-108",
+        store: "Shopify-UK",
+        country: "英国",
+        warehouse: "东莞仓",
+        qty: 1500,
+        amount: 6750,
+        status: "待审核",
+        payStatus: "未付款"
       }
     ]
   },
