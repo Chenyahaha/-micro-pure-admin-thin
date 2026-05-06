@@ -3,7 +3,9 @@
     "allow": [
       "Bash(pnpm --filter wujie-sub-procurement-vue3 build)",
       "Bash(pnpm install *)",
-      "Bash(pnpm --filter wujie-sub-vue3 build)"
+      "Bash(pnpm --filter wujie-sub-vue3 build)",
+      "Bash(gh auth *)",
+      "PowerShell(gh auth *)"
     ]
   }
 }
