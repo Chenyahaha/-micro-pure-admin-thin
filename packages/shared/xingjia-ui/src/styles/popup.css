@@ -1,0 +1,19 @@
+.page-popup-container {
+  position: relative;
+  height: 100%;
+}
+
+.page-popup-container .page-modal.arco-modal-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.page-popup-container .page-modal .arco-modal {
+  pointer-events: auto;
+  max-width: calc(100% - 32px);
+}

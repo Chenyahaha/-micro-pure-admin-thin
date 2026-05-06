@@ -1,0 +1,22 @@
+{
+  "name": "wujie-sub-procurement-vue3",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 7204",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 7204"
+  },
+  "dependencies": {
+    "@xingjia/ui": "workspace:*",
+    "@arco-design/web-vue": "^2.58.0",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

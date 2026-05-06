@@ -1,0 +1,13 @@
+{
+  "name": "pure-admin-micro-custom",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "wujie:dev": "pnpm --dir packages/main-apps/pure-admin-wujie dev",
+    "dev:all": "pnpm -r --parallel --stream --filter \"./packages/main-apps/pure-admin-wujie\" --filter \"./packages/sub-apps/wujie/procurement-vue3\" --filter \"./packages/sub-apps/wujie/vue3\" dev",
+    "wujie:typecheck": "pnpm --dir packages/main-apps/pure-admin-wujie typecheck",
+    "ui:build": "echo xingjia-ui is copy-ready, no build needed",
+    "procurement:build": "pnpm --dir packages/sub-apps/wujie/procurement-vue3 build"
+  }
+}

@@ -1,0 +1,4 @@
+packages:
+  - "packages/main-apps/pure-admin-wujie"
+  - "packages/shared/*"
+  - "packages/sub-apps/wujie/*"
