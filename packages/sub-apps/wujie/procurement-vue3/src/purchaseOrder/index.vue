@@ -8,6 +8,7 @@ import PurchaseOrderForm from './form.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import type { PurchaseOrderTableRow } from './data';
 import { flattenBatches, sumQty, sumAmount } from './data';
+import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
 
 const { tableData, filteredBatches, searchKeyword, searchPayStatus, modalVisible, modalMode, formData, handleAdd, handleEditBatch, handleEditFromLine, handleDeleteBatch, handleDeleteLine, handleSave } = useCrud();
 
@@ -59,14 +60,20 @@ const configurableColumns = [
     { key: 'payStatus', label: '付款状态' }
 ];
 
-const columnConfig = ref(configurableColumns.map(item => ({ key: item.key } as { key: string; fixed?: 'left' | 'right' })));
-const orderedVisibleColumns = computed(() =>
-    columnConfig.value
-        .map(item => {
-            const col = configurableColumns.find(c => c.key === item.key);
-            return col ? { ...col, fixed: item.fixed } : null;
-        })
-        .filter(Boolean) as (typeof configurableColumns[number] & { fixed?: 'left' | 'right' })[]
+const headerGroups = [
+    { label: '采购计划', color: '#005bf5', fromTh: 3, toTh: 4 },
+    { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 }
+];
+
+const columnConfig = ref(configurableColumns.map(item => ({ key: item.key }) as { key: string; fixed?: 'left' | 'right' }));
+const orderedVisibleColumns = computed(
+    () =>
+        columnConfig.value
+            .map(item => {
+                const col = configurableColumns.find(c => c.key === item.key);
+                return col ? { ...col, fixed: item.fixed } : null;
+            })
+            .filter(Boolean) as ((typeof configurableColumns)[number] & { fixed?: 'left' | 'right' })[]
 );
 const tableColumnCount = computed(() => orderedVisibleColumns.value.length + 2);
 
@@ -213,6 +220,7 @@ function shortName(name: string) {
             </div>
 
             <div class="table-inner">
+                <TableGroupHeader :groups="headerGroups" />
                 <a-table :data="flatTableData" :scroll="{ x: 1380, y: tableScrollY }" :pagination="false" :bordered="{ cell: true }" :span-method="spanMethod" row-key="key" :row-class="rowClassName">
                     <template #columns>
                         <a-table-column :width="48" align="center" fixed="left">
@@ -260,7 +268,35 @@ function shortName(name: string) {
                             </template>
                         </a-table-column>
 
-                        <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :width="col.key === 'no' ? 200 : col.key === 'image' ? 72 : col.key === 'store' ? 150 : col.key === 'country' ? 100 : col.key === 'warehouse' ? 112 : col.key === 'qty' ? 72 : col.key === 'amount' ? 150 : col.key === 'status' ? 92 : col.key === 'payStatus' ? 92 : undefined" :min-width="col.key === 'sku' || col.key === 'productName' ? 220 : undefined" :align="col.key === 'image' || col.key === 'status' || col.key === 'payStatus' ? 'center' : col.key === 'qty' || col.key === 'amount' ? 'right' : undefined" :fixed="col.fixed || undefined">
+                        <a-table-column
+                            v-for="col in orderedVisibleColumns"
+                            :key="col.key"
+                            :title="col.label"
+                            :width="
+                                col.key === 'no'
+                                    ? 200
+                                    : col.key === 'image'
+                                      ? 72
+                                      : col.key === 'store'
+                                        ? 150
+                                        : col.key === 'country'
+                                          ? 100
+                                          : col.key === 'warehouse'
+                                            ? 112
+                                            : col.key === 'qty'
+                                              ? 72
+                                              : col.key === 'amount'
+                                                ? 150
+                                                : col.key === 'status'
+                                                  ? 92
+                                                  : col.key === 'payStatus'
+                                                    ? 92
+                                                    : undefined
+                            "
+                            :min-width="col.key === 'sku' || col.key === 'productName' ? 220 : undefined"
+                            :align="col.key === 'image' || col.key === 'status' || col.key === 'payStatus' ? 'center' : col.key === 'qty' || col.key === 'amount' ? 'right' : undefined"
+                            :fixed="col.fixed || undefined"
+                        >
                             <template #cell="{ record }">
                                 <span v-if="col.key === 'no' && record.rowType === 'child'" class="cell-strong">{{ record.line.no }}</span>
                                 <div v-else-if="col.key === 'image' && record.rowType === 'child'" class="thumb-wrap"></div>
