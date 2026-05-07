@@ -40,7 +40,7 @@ let resizeObserver: ResizeObserver | null = null;
 
 const headerGroups = [
     { label: '采购计划', color: '#005bf5', fromTh: 3, toTh: 4 },
-    { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 },
+    { label: '采购单', color: '#f58718', fromTh: 13, toTh: 15 }
 ];
 
 onMounted(() => {
@@ -100,7 +100,7 @@ onUnmounted(() => {
 
         <div ref="tableAreaRef" class="table-area">
             <TableGroupHeader :groups="headerGroups" />
-            <a-table :data="filteredData" :scroll="{ y: tableScrollY }" :pagination="{ pageSize: 10, showTotal: true, showPageSize: true }" :bordered="false" stripe row-key="id">
+            <a-table :data="filteredData" :scroll="{ y: tableScrollY }" :pagination="{ pageSize: 10, showTotal: true, showPageSize: true }" :bordered="{ cell: true }" stripe row-key="id">
                 <template #columns>
                     <a-table-column title="计划编号" data-index="no" :width="150" />
                     <a-table-column title="申请部门" data-index="dept" :width="100" />
