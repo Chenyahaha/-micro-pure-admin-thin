@@ -9,6 +9,7 @@
 - 点击确定后统一应用配置
 
 组件文件：`TableColumnConfigDrawer.vue`
+组合函数：`useColumnConfig.ts`
 
 ---
 
@@ -25,108 +26,79 @@
 
 ## 2. 快速接入
 
-### 2.1 引入组件
+### 2.1 最简用法（推荐）
+
+通过 `useColumnConfig` 组合函数，只需定义列 + 一行调用即可：
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue';
 import TableColumnConfigDrawer from './TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from './TableColumnConfigDrawer/useColumnConfig';
 
 const configurableColumns = [
-  { key: 'no', label: '子单号' },
-  { key: 'sku', label: 'SKU' },
-  { key: 'productName', label: '产品' },
+  { key: 'no', label: '计划编号' },
+  { key: 'dept', label: '申请部门' },
   { key: 'qty', label: '数量' },
-  { key: 'amount', label: '金额' }
+  { key: 'amount', label: '金额' },
+  { key: 'status', label: '状态' }
 ];
 
-// 默认全部显示，顺序即初始表格顺序
-const columnConfig = ref(configurableColumns.map(item => ({ key: item.key })));
+// 一行搞定 ref + orderedVisibleColumns
+const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
 </script>
 
 <template>
-  <TableColumnConfigDrawer
-    v-model="columnConfig"
-    :options="configurableColumns"
+  <!-- 放在工具栏合适位置 -->
+  <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+
+  <!-- 表格列按 orderedVisibleColumns 渲染 -->
+  <a-table-column
+    v-for="col in orderedVisibleColumns"
+    :key="col.key"
+    :title="col.label"
+    :data-index="col.key"
+    :fixed="col.fixed || undefined"
   />
 </template>
 ```
 
+`useColumnConfig` 返回值：
+
+| 名称 | 类型 | 说明 |
+| --- | --- | --- |
+| `columnConfigRef` | `Ref<InstanceType<typeof TableColumnConfigDrawer>>` | 绑定到组件的模板 ref |
+| `orderedVisibleColumns` | `ComputedRef<(TableColumnOption & { fixed?: 'left' \| 'right' })[]>` | 当前可见且排好序的列列表 |
+
 ### 2.2 数据结构
 
-`modelValue` 的类型为 `ColumnConfigItem[]`：
+`TableColumnOption`（列定义）：
 
 ```ts
-interface ColumnConfigItem {
-  key: string;
+interface TableColumnOption {
+  key: string;       // 列唯一标识
+  label: string;     // 列显示名称
+  disabled?: boolean; // 是否禁用勾选（可选）
+}
+```
+
+`orderedVisibleColumns` 中每项的扩展类型：
+
+```ts
+interface VisibleColumn extends TableColumnOption {
   fixed?: 'left' | 'right';  // 不设置或 undefined 表示不固定
 }
 ```
 
-### 2.3 表格按配置渲染（关键）
-
-拖拽排序和固定列是否生效，取决于你是否按 `columnConfig` 渲染列。
-
-```ts
-const orderedVisibleColumns = computed(() =>
-  columnConfig.value
-    .map(item => {
-      const col = configurableColumns.find(c => c.key === item.key);
-      return col ? { ...col, fixed: item.fixed } : null;
-    })
-    .filter(Boolean)
-);
-```
-
-在模板中绑定 `fixed`：
-
-```html
-<a-table-column
-  v-for="col in orderedVisibleColumns"
-  :key="col.key"
-  :fixed="col.fixed || undefined"
-  ...
-/>
-```
-
 ---
 
-## 3. Props / Emits
-
-### Props
+## 3. Props
 
 | 名称 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `modelValue` | `ColumnConfigItem[]` | 是 | - | 当前已选列配置（key、fixed、顺序） |
 | `options` | `TableColumnOption[]` | 是 | - | 可配置列项 |
 | `title` | `string` | 否 | `列配置` | 抽屉标题 |
 | `triggerText` | `string` | 否 | `列配置` | 触发按钮文字 |
-| `width` | `number` | 否 | `500` | 抽屉宽度 |
-
-`TableColumnOption`：
-
-```ts
-interface TableColumnOption {
-  key: string;
-  label: string;
-  disabled?: boolean;
-}
-```
-
-`ColumnConfigItem`：
-
-```ts
-interface ColumnConfigItem {
-  key: string;
-  fixed?: 'left' | 'right';
-}
-```
-
-### Emits
-
-| 事件名 | 参数 | 说明 |
-| --- | --- | --- |
-| `update:modelValue` | `ColumnConfigItem[]` | 点击"确定"后回传最终列配置（含 fixed 和顺序） |
+| `width` | `number` | 否 | `700` | 抽屉宽度 |
 
 ---
 
@@ -138,15 +110,14 @@ interface ColumnConfigItem {
 - 再点一次：切换为固定到右侧（显示绿色右边框 + "右" 标签）
 - 再点一次：取消固定
 
-固定状态会通过 `ColumnConfigItem.fixed` 传递给父组件，父组件需将其绑定到 `<a-table-column :fixed="col.fixed">` 上。
+固定状态通过 `orderedVisibleColumns` 中的 `fixed` 字段传递，绑定到 `<a-table-column :fixed="col.fixed">` 即可生效。
 
 ---
 
 ## 5. 推荐实践
 
 - `options` 的 `key` 要稳定且唯一，不要用会变化的值。
-- 建议把 `columnConfig` 持久化到本地（如 `localStorage`），提升用户体验。
-- 若页面存在"合并单元格"，列数相关逻辑需要跟随可见列动态计算。
+- 若页面存在"合并单元格"，列数相关逻辑需要跟随可见列动态计算（如 `tableColumnCount = orderedVisibleColumns.length + 固定列数`）。
 
 ---
 
@@ -154,24 +125,24 @@ interface ColumnConfigItem {
 
 ### Q1：隐藏生效了，但拖拽排序不生效？
 
-通常是因为表格列仍按原始 `configurableColumns` 顺序渲染。
-请改为按 `columnConfig` 顺序组装后再渲染（见 2.3）。
+通常是因为表格列仍按原始 `configurableColumns` 顺序渲染，请改为按 `orderedVisibleColumns` 顺序渲染。
 
 ### Q2：固定列不生效？
 
-需要将 `ColumnConfigItem.fixed` 传给 `<a-table-column :fixed="col.fixed">`，否则 Arco Table 不知道哪些列需要固定。
+需要将 `col.fixed` 传给 `<a-table-column :fixed="col.fixed || undefined">`，否则 Arco Table 不知道哪些列需要固定。
 
 ### Q3：为什么最少要保留一列？
 
-组件内部限制 `draft` 不能为空，避免用户把所有业务列都隐藏后页面不可用。
+组件内部限制不能把所有业务列都隐藏，避免页面不可用。
 
 ---
 
 ## 7. 在其他项目复用
 
-最简单方式：复制以下两个文件到目标项目同级目录：
+复制以下三个文件到目标项目同级目录：
 
 - `TableColumnConfigDrawer.vue`
+- `useColumnConfig.ts`
 - `TableColumnConfigDrawer.md`
 
-然后按"2. 快速接入"进行使用。
+然后按"2.1 最简用法"进行使用。

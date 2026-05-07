@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 
 export interface GroupDef {
     label: string;
@@ -39,8 +39,10 @@ function updatePositions() {
     const next = new Map<number, { lineLeft: number; lineWidth: number; tagLeft: number; tagWidth: number; lineTop: number; visible: boolean; tagVisible: boolean }>();
 
     for (const group of props.groups) {
-        const thFrom = ths[group.fromTh] as HTMLElement | undefined;
-        const thTo = ths[group.toTh] as HTMLElement | undefined;
+        const lo = Math.min(group.fromTh, group.toTh);
+        const hi = Math.max(group.fromTh, group.toTh);
+        const thFrom = ths[lo] as HTMLElement | undefined;
+        const thTo = ths[hi] as HTMLElement | undefined;
         if (!thFrom || !thTo) continue;
         const rFrom = thFrom.getBoundingClientRect();
         const rTo = thTo.getBoundingClientRect();
@@ -95,6 +97,8 @@ onMounted(() => {
         }
     });
 });
+
+watch(() => props.groups, () => nextTick(updatePositions), { deep: true });
 
 onUnmounted(() => {
     resizeObserver?.disconnect();

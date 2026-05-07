@@ -6,6 +6,7 @@ import { useCrud } from './useCrud';
 import { payStatusOptions } from './config';
 import PurchaseOrderForm from './form.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
 import type { PurchaseOrderTableRow } from './data';
 import { flattenBatches, sumQty, sumAmount } from './data';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
@@ -65,16 +66,7 @@ const headerGroups = [
     { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 }
 ];
 
-const columnConfig = ref(configurableColumns.map(item => ({ key: item.key }) as { key: string; fixed?: 'left' | 'right' }));
-const orderedVisibleColumns = computed(
-    () =>
-        columnConfig.value
-            .map(item => {
-                const col = configurableColumns.find(c => c.key === item.key);
-                return col ? { ...col, fixed: item.fixed } : null;
-            })
-            .filter(Boolean) as ((typeof configurableColumns)[number] & { fixed?: 'left' | 'right' })[]
-);
+const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
 const tableColumnCount = computed(() => orderedVisibleColumns.value.length + 2);
 
 function spanMethod({ record, columnIndex }: { record: Record<string, unknown>; columnIndex: number }) {
@@ -214,7 +206,7 @@ function shortName(name: string) {
                     <a-select v-model="searchPayStatus" :options="payStatusOptions" placeholder="付款状态" allow-clear style="width: 120px" />
                 </a-space>
                 <a-space>
-                    <TableColumnConfigDrawer v-model="columnConfig" :options="configurableColumns" />
+                    <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
                     <a-button type="primary" @click="handleAdd">新增采购订单</a-button>
                 </a-space>
             </div>

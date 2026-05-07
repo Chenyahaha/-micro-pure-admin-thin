@@ -5,6 +5,8 @@ import { useCrud } from './useCrud';
 import { statusOptions } from './config';
 import PurchasePlanForm from './form.vue';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
 
 const { tableData, filteredData, searchKeyword, searchStatus, modalVisible, modalMode, formData, handleAdd, handleEdit, handleDelete, handleSave } = useCrud();
 
@@ -38,9 +40,22 @@ const tableAreaRef = ref<HTMLElement>();
 const tableScrollY = ref(400);
 let resizeObserver: ResizeObserver | null = null;
 
+const configurableColumns = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    { key: 'item', label: '采购项目' },
+    { key: 'qty', label: '数量' },
+    { key: 'budget', label: '预算(元)' },
+    { key: 'owner', label: '负责人' },
+    { key: 'expectDate', label: '期望到货' },
+    { key: 'status', label: '状态' }
+];
+
+const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
+
 const headerGroups = [
     { label: '采购计划', color: '#005bf5', fromTh: 3, toTh: 4 },
-    { label: '采购单', color: '#f58718', fromTh: 13, toTh: 15 }
+    { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 }
 ];
 
 onMounted(() => {
@@ -92,7 +107,10 @@ onUnmounted(() => {
                         <a-select v-model="searchStatus" :options="statusOptions" placeholder="状态筛选" allow-clear />
                     </a-col>
                     <a-col :span="12" style="text-align: right">
-                        <a-button type="primary" @click="handleAdd">新建计划</a-button>
+                        <a-space>
+                            <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+                            <a-button type="primary" @click="handleAdd">新建计划</a-button>
+                        </a-space>
                     </a-col>
                 </a-row>
             </a-card>
@@ -102,31 +120,36 @@ onUnmounted(() => {
             <TableGroupHeader :groups="headerGroups" />
             <a-table :data="filteredData" :scroll="{ y: tableScrollY }" :pagination="{ pageSize: 10, showTotal: true, showPageSize: true }" :bordered="{ cell: true }" stripe row-key="id">
                 <template #columns>
-                    <a-table-column title="计划编号" data-index="no" :width="150" />
-                    <a-table-column title="申请部门" data-index="dept" :width="100" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="数量" data-index="qty" :width="80" align="center" />
-                    <a-table-column title="预算(元)" :width="130" align="right">
+                    <a-table-column
+                        v-for="col in orderedVisibleColumns"
+                        :key="col.key"
+                        :title="col.label"
+                        :data-index="col.key"
+                        :width="
+                            col.key === 'no'
+                                ? 150
+                                : col.key === 'dept'
+                                  ? 100
+                                  : col.key === 'item'
+                                    ? 140
+                                    : col.key === 'qty'
+                                      ? 80
+                                      : col.key === 'budget'
+                                        ? 130
+                                        : col.key === 'owner'
+                                          ? 90
+                                          : col.key === 'expectDate'
+                                            ? 120
+                                            : col.key === 'status'
+                                              ? 100
+                                              : undefined
+                        "
+                        :align="col.key === 'qty' ? 'center' : col.key === 'budget' ? 'right' : col.key === 'status' ? 'center' : undefined"
+                        :fixed="col.fixed || undefined"
+                    >
                         <template #cell="{ record }">
-                            <span class="amount-text">{{ formatAmount(record.budget) }}</span>
-                        </template>
-                    </a-table-column>
-                    <a-table-column title="负责人" data-index="owner" :width="90" />
-                    <a-table-column title="期望到货" data-index="expectDate" :width="120" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="采购项目" data-index="item" :width="140" />
-                    <a-table-column title="状态" :width="100" align="center">
-                        <template #cell="{ record }">
-                            <a-tag :color="statusColor(record.status)" size="small">{{ record.status }}</a-tag>
+                            <span v-if="col.key === 'budget'" class="amount-text">{{ formatAmount(record.budget) }}</span>
+                            <a-tag v-else-if="col.key === 'status'" :color="statusColor(record.status)" size="small">{{ record.status }}</a-tag>
                         </template>
                     </a-table-column>
                     <a-table-column title="操作" :width="140" align="center" fixed="right">
