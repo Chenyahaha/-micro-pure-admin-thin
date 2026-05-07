@@ -2,7 +2,7 @@
 // 引入 Vue 核心 API
 import { computed, ref, watch } from 'vue';
 // 引入 Arco Design 图标组件：设置图标、图钉图标、菜单图标
-import { IconSettings, IconPushpin, IconMenu } from '@arco-design/web-vue/es/icon';
+import { IconSettings, IconPushpin, IconMenu, IconClose } from '@arco-design/web-vue/es/icon';
 
 // 列选项接口：定义每一列的配置项
 export interface TableColumnOption {
@@ -80,6 +80,14 @@ function toggleOption(key: string, checked: boolean | (string | number | boolean
     }
     // 取消勾选：从 draft 中移除
     draft.value = draft.value.filter(item => item.key !== key);
+}
+
+// 取消固定
+function unfix(key: string) {
+    const item = draft.value.find(i => i.key === key);
+    if (!item) return;
+    item.fixed = undefined;
+    reorderDraft();
 }
 
 // 循环切换列的固定状态：不固定 → 左固定 → 右固定 → 不固定
@@ -202,6 +210,10 @@ function onDrop(targetKey: string) {
                             </a-tooltip>
                             <!-- 固定方向标签：显示"左"或"右" -->
                             <span v-if="item.fixed" class="fixed-tag">{{ item.fixed === 'left' ? '左' : '右' }}</span>
+                            <!-- 取消固定按钮 -->
+                            <span v-if="item.fixed" class="unfix-btn" @click.stop="unfix(item.key)">
+                                <IconClose />
+                            </span>
                         </div>
                         <!-- 空状态提示 -->
                         <div v-if="selectedOptions.length === 0" class="selected-empty">请至少选择一列</div>
@@ -347,6 +359,25 @@ function onDrop(targetKey: string) {
     border-right: 3px solid rgb(var(--green-6));
     border-radius: 6px 3px 3px 6px;
     background: rgba(var(--green-1), 0.6);
+}
+
+/* 取消固定按钮：小叉号 */
+.unfix-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--color-text-4);
+    flex-shrink: 0;
+    transition: all 0.2s;
+    font-size: 10px;
+}
+.unfix-btn:hover {
+    color: rgb(var(--red-6));
+    background: rgb(var(--red-1));
 }
 
 /* 列名称容器：弹性占满剩余空间 */
