@@ -7,6 +7,11 @@ import { payStatusOptions } from './config';
 import PurchaseOrderForm from './form.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+import type { TableColumnOption, TableColumnGroup } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+
+function isGroupOption(opt: TableColumnOption): opt is TableColumnGroup {
+    return 'children' in opt && Array.isArray(opt.children);
+}
 import type { PurchaseOrderTableRow } from './data';
 import { flattenBatches, sumQty, sumAmount } from './data';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
@@ -47,24 +52,39 @@ const pagedBatches = computed(() => {
 
 const flatTableData = computed(() => flattenBatches(pagedBatches.value, expandedBatchIds.value));
 
-const configurableColumns = [
+const configurableColumns: TableColumnOption[] = [
     { key: 'no', label: '子单号' },
     { key: 'image', label: '图片' },
     { key: 'sku', label: 'SKU' },
     { key: 'productName', label: '产品' },
-    { key: 'store', label: '店铺' },
-    { key: 'country', label: '国家/地区' },
-    { key: 'warehouse', label: '仓库' },
-    { key: 'qty', label: '数量' },
+    {
+        groupKey: 'purchasePlan',
+        label: '采购计划',
+        color: '#005bf5',
+        children: [
+            { key: 'store', label: '店铺' },
+            { key: 'country', label: '国家/地区' }
+        ]
+    },
+    {
+        groupKey: 'purchaseOrder',
+        label: '采购单',
+        color: '#f58718',
+        children: [
+            { key: 'warehouse', label: '仓库' },
+            { key: 'qty', label: '数量' }
+        ]
+    },
     { key: 'amount', label: '金额' },
     { key: 'status', label: '订单状态' },
     { key: 'payStatus', label: '付款状态' }
 ];
 
-const headerGroups = [
-    { label: '采购计划', color: '#005bf5', fromTh: 3, toTh: 4 },
-    { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 }
-];
+const headerGroups = computed(() =>
+    configurableColumns
+        .filter(isGroupOption)
+        .map(g => ({ groupKey: g.groupKey, label: g.label, color: g.color }))
+);
 
 const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
 const tableColumnCount = computed(() => orderedVisibleColumns.value.length + 2);
@@ -212,7 +232,7 @@ function shortName(name: string) {
             </div>
 
             <div class="table-inner">
-                <TableGroupHeader :groups="headerGroups" />
+                <TableGroupHeader :groups="headerGroups" :columns="orderedVisibleColumns" :leading-column-count="1" />
                 <a-table :data="flatTableData" :scroll="{ x: 1380, y: tableScrollY }" :pagination="false" :bordered="{ cell: true }" :span-method="spanMethod" row-key="key" :row-class="rowClassName">
                     <template #columns>
                         <a-table-column :width="48" align="center" fixed="left">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+
 import { PageModal } from '@xingjia/ui';
 import { useCrud } from './useCrud';
 import { statusOptions } from './config';
@@ -7,6 +8,11 @@ import PurchasePlanForm from './form.vue';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+import type { TableColumnOption, TableColumnGroup } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+
+function isGroupOption(opt: TableColumnOption): opt is TableColumnGroup {
+    return 'children' in opt && Array.isArray(opt.children);
+}
 
 const { tableData, filteredData, searchKeyword, searchStatus, modalVisible, modalMode, formData, handleAdd, handleEdit, handleDelete, handleSave } = useCrud();
 
@@ -40,23 +46,38 @@ const tableAreaRef = ref<HTMLElement>();
 const tableScrollY = ref(400);
 let resizeObserver: ResizeObserver | null = null;
 
-const configurableColumns = [
+const configurableColumns: TableColumnOption[] = [
     { key: 'no', label: '计划编号' },
     { key: 'dept', label: '申请部门' },
     { key: 'item', label: '采购项目' },
-    { key: 'qty', label: '数量' },
-    { key: 'budget', label: '预算(元)' },
-    { key: 'owner', label: '负责人' },
-    { key: 'expectDate', label: '期望到货' },
+    {
+        groupKey: 'purchasePlan',
+        label: '采购计划',
+        color: '#005bf5',
+        children: [
+            { key: 'qty', label: '数量' },
+            { key: 'budget', label: '预算(元)' }
+        ]
+    },
+    {
+        groupKey: 'purchaseOrder',
+        label: '采购单',
+        color: '#f58718',
+        children: [
+            { key: 'owner', label: '负责人' },
+            { key: 'expectDate', label: '期望到货' }
+        ]
+    },
     { key: 'status', label: '状态' }
 ];
 
 const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
 
-const headerGroups = [
-    { label: '采购计划', color: '#005bf5', fromTh: 3, toTh: 4 },
-    { label: '采购单', color: '#f58718', fromTh: 5, toTh: 6 }
-];
+const headerGroups = computed(() =>
+    configurableColumns
+        .filter(isGroupOption)
+        .map(g => ({ groupKey: g.groupKey, label: g.label, color: g.color }))
+);
 
 onMounted(() => {
     if (!tableAreaRef.value) return;
@@ -117,7 +138,7 @@ onUnmounted(() => {
         </div>
 
         <div ref="tableAreaRef" class="table-area">
-            <TableGroupHeader :groups="headerGroups" />
+            <TableGroupHeader :groups="headerGroups" :columns="orderedVisibleColumns" />
             <a-table :data="filteredData" :scroll="{ y: tableScrollY }" :pagination="{ pageSize: 10, showTotal: true, showPageSize: true }" :bordered="{ cell: true }" stripe row-key="id">
                 <template #columns>
                     <a-table-column

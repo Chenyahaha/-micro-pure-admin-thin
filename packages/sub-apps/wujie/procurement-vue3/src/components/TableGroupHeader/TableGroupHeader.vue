@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import type { VisibleColumn } from '../TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 
 export interface GroupDef {
+    groupKey: string;
     label: string;
     color: string;
-    fromTh: number; // 起始列索引（0-based）
-    toTh: number; // 结束列索引（0-based，包含）
 }
 
 const props = defineProps<{
     groups: GroupDef[];
+    columns?: VisibleColumn[];
+    leadingColumnCount?: number;
 }>();
 
 const el = ref<HTMLElement>();
-const positions = ref<Map<number, { lineLeft: number; lineWidth: number; tagLeft: number; tagWidth: number; lineTop: number; visible: boolean; tagVisible: boolean }>>(new Map());
+const positions = ref<Map<string, { lineLeft: number; lineWidth: number; tagLeft: number; tagWidth: number; lineTop: number; visible: boolean; tagVisible: boolean }>>(new Map());
 
 let scrollEl: HTMLElement | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -33,40 +35,48 @@ function updatePositions() {
     if (!container) return;
     const ths = container.querySelectorAll('.arco-table-header th');
     const containerRect = container.getBoundingClientRect();
-    // 用表格内容容器的可视区域裁剪（header 和 body 的共同父级）
     const scrollContainer = container.querySelector('.arco-table-content') || container.querySelector('.arco-table-container') || container;
     const scrollRect = scrollContainer.getBoundingClientRect();
-    const next = new Map<number, { lineLeft: number; lineWidth: number; tagLeft: number; tagWidth: number; lineTop: number; visible: boolean; tagVisible: boolean }>();
+    const next = new Map<string, { lineLeft: number; lineWidth: number; tagLeft: number; tagWidth: number; lineTop: number; visible: boolean; tagVisible: boolean }>();
+
+    const leading = props.leadingColumnCount ?? 0;
+    const cols = props.columns ?? [];
 
     for (const group of props.groups) {
-        const lo = Math.min(group.fromTh, group.toTh);
-        const hi = Math.max(group.fromTh, group.toTh);
-        const thFrom = ths[lo] as HTMLElement | undefined;
-        const thTo = ths[hi] as HTMLElement | undefined;
+        // Find the first and last visible column keys that belong to this group
+        const groupCols = cols.filter(c => c.groupKey === group.groupKey);
+        if (groupCols.length === 0) continue;
+
+        const firstColKey = groupCols[0].key;
+        const lastColKey = groupCols[groupCols.length - 1].key;
+
+        // Compute th index: leading columns + index within visible configurable columns
+        const firstIdx = leading + cols.findIndex(c => c.key === firstColKey);
+        const lastIdx = leading + cols.findIndex(c => c.key === lastColKey);
+
+        if (firstIdx < 0 || lastIdx < 0) continue;
+
+        const thFrom = ths[firstIdx] as HTMLElement | undefined;
+        const thTo = ths[lastIdx] as HTMLElement | undefined;
         if (!thFrom || !thTo) continue;
+
         const rFrom = thFrom.getBoundingClientRect();
         const rTo = thTo.getBoundingClientRect();
-        // 原始线位置（相对于容器）
         const rawLineLeft = rFrom.left - containerRect.left;
         const rawLineRight = rTo.right - containerRect.left;
-        // 滚动容器的左右边界（相对于容器）
         const viewLeft = scrollRect.left - containerRect.left;
         const viewRight = scrollRect.right - containerRect.left;
-        // 整组完全在视口外时隐藏
         const visible = rawLineRight > viewLeft && rawLineLeft < viewRight;
-        // 裁剪线到滚动容器可视范围内
         const clampedLeft = Math.max(rawLineLeft, viewLeft);
         const clampedRight = Math.min(rawLineRight, viewRight);
         const clampedWidth = Math.max(0, clampedRight - clampedLeft);
-        // 标签跟随起始列，但不超过可视范围左边界
         const tagLeft = Math.max(rawLineLeft, viewLeft);
-        // 整组露出超过 1/10 时才显示标签
         const groupWidth = rTo.right - rFrom.left;
         const threshold = groupWidth / 9;
         const visibleGroupLeft = Math.max(rFrom.left, scrollRect.left);
         const visibleGroupRight = Math.min(rTo.right, scrollRect.right);
         const tagVisible = visibleGroupRight - visibleGroupLeft >= threshold;
-        next.set(group.fromTh, {
+        next.set(group.groupKey, {
             lineLeft: clampedLeft,
             lineWidth: clampedWidth,
             tagLeft,
@@ -99,6 +109,7 @@ onMounted(() => {
 });
 
 watch(() => props.groups, () => nextTick(updatePositions), { deep: true });
+watch(() => props.columns, () => nextTick(updatePositions), { deep: true });
 
 onUnmounted(() => {
     resizeObserver?.disconnect();
@@ -110,24 +121,24 @@ onUnmounted(() => {
 
 <template>
     <div ref="el" class="table-group-header">
-        <template v-for="group in groups" :key="group.fromTh">
+        <template v-for="group in groups" :key="group.groupKey">
             <span
-                v-show="positions.get(group.fromTh)?.visible"
+                v-show="positions.get(group.groupKey)?.visible"
                 class="group-line"
                 :style="{
-                    left: positions.get(group.fromTh)?.lineLeft + 'px',
-                    width: positions.get(group.fromTh)?.lineWidth + 'px',
-                    top: (positions.get(group.fromTh)?.lineTop ?? 0) - 3 + 'px',
+                    left: positions.get(group.groupKey)?.lineLeft + 'px',
+                    width: positions.get(group.groupKey)?.lineWidth + 'px',
+                    top: (positions.get(group.groupKey)?.lineTop ?? 0) - 3 + 'px',
                     background: group.color
                 }"
             ></span>
             <span
-                v-show="positions.get(group.fromTh)?.tagVisible"
+                v-show="positions.get(group.groupKey)?.tagVisible"
                 class="group-tag"
                 :style="{
-                    left: positions.get(group.fromTh)?.tagLeft + 'px',
-                    width: positions.get(group.fromTh)?.tagWidth + 'px',
-                    top: 'calc(' + (positions.get(group.fromTh)?.lineTop ?? 0) + 'px - 15px)',
+                    left: positions.get(group.groupKey)?.tagLeft + 'px',
+                    width: positions.get(group.groupKey)?.tagWidth + 'px',
+                    top: 'calc(' + (positions.get(group.groupKey)?.lineTop ?? 0) + 'px - 15px)',
                     background: group.color
                 }"
             >
