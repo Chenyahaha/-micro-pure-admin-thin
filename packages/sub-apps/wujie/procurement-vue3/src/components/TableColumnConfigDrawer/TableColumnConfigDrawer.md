@@ -1,148 +1,347 @@
 # TableColumnConfigDrawer 使用文档
 
-`TableColumnConfigDrawer` 是一个通用的表格列配置组件，支持：
-
-- 列显示/隐藏
-- 已选列拖拽排序
-- 列固定（左侧/右侧）
-- 恢复默认配置
-- 点击确定后统一应用配置
+表格列配置抽屉，支持列显示/隐藏、拖拽排序、列固定（左/右）、分组拖拽。
 
 组件文件：`TableColumnConfigDrawer.vue`
 组合函数：`useColumnConfig.ts`
 
 ---
 
-## 1. 依赖前提
+## 1. 快速接入
 
-当前组件基于以下技术栈：
+### 1.0 导入说明
 
-- Vue 3 (`<script setup lang="ts">`)
-- Arco Design Vue 组件与图标
+根据你的项目是否使用 TypeScript，有两种写法：
 
-请确保项目已安装并正确引入 Arco 样式。
+**TypeScript 项目（`<script setup lang="ts">`）**— 三行 import：
 
----
+```ts
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+import type { TableColumnOption } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+```
 
-## 2. 快速接入
+| 导入                      | 作用                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `TableColumnConfigDrawer` | 组件本身，用于在 `<template>` 中渲染 `<TableColumnConfigDrawer>` 标签                              |
+| `useColumnConfig`         | 组合函数，一行调用拿到 `columnConfigRef`、`orderedVisibleColumns`、`headerGroups` 三个响应式数据   |
+| `type TableColumnOption`  | TypeScript 类型定义，给 `configurableColumns` 加类型标注，提供编辑器检查和自动补全（编译后不存在） |
 
-### 2.1 最简用法（推荐）
+**非 TypeScript 项目（`<script setup>`）**— 去掉第三行 `import type`，不加类型标注：
 
-通过 `useColumnConfig` 组合函数，只需定义列 + 一行调用即可：
+```js
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+```
+
+> 组件内部使用了 `lang="ts"`，Vite 会自动编译，你的页面不需要写 `lang="ts"`。如果项目没有 `typescript` 依赖，执行 `npm install -D typescript` 即可。
+
+### 1.1 平面列（无分组）
+
+**TypeScript 写法：**
 
 ```vue
 <script setup lang="ts">
-import TableColumnConfigDrawer from './TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
-import { useColumnConfig } from './TableColumnConfigDrawer/useColumnConfig';
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+import type { TableColumnOption } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 
-const configurableColumns = [
-  { key: 'no', label: '计划编号' },
-  { key: 'dept', label: '申请部门' },
-  { key: 'qty', label: '数量' },
-  { key: 'amount', label: '金额' },
-  { key: 'status', label: '状态' }
+const configurableColumns: TableColumnOption[] = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    { key: 'qty', label: '数量' },
+    { key: 'amount', label: '金额' },
+    { key: 'status', label: '状态' }
 ];
 
-// 一行搞定 ref + orderedVisibleColumns
-const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
 </script>
 
 <template>
-  <!-- 放在工具栏合适位置 -->
-  <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+    <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
 
-  <!-- 表格列按 orderedVisibleColumns 渲染 -->
-  <a-table-column
-    v-for="col in orderedVisibleColumns"
-    :key="col.key"
-    :title="col.label"
-    :data-index="col.key"
-    :fixed="col.fixed || undefined"
-  />
+    <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :data-index="col.key" :fixed="col.fixed || undefined" />
 </template>
 ```
 
-`useColumnConfig` 返回值：
+**非 TypeScript 写法：**
 
-| 名称 | 类型 | 说明 |
-| --- | --- | --- |
-| `columnConfigRef` | `Ref<InstanceType<typeof TableColumnConfigDrawer>>` | 绑定到组件的模板 ref |
-| `orderedVisibleColumns` | `ComputedRef<(TableColumnOption & { fixed?: 'left' \| 'right' })[]>` | 当前可见且排好序的列列表 |
+```vue
+<script setup>
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
 
-### 2.2 数据结构
+const configurableColumns = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    { key: 'qty', label: '数量' },
+    { key: 'amount', label: '金额' },
+    { key: 'status', label: '状态' }
+];
 
-`TableColumnOption`（列定义）：
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
+</script>
+
+<template>
+    <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+
+    <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :data-index="col.key" :fixed="col.fixed || undefined" />
+</template>
+```
+
+### 1.2 分组列（推荐搭配 TableGroupHeader）
+
+将需要整组拖拽的列放入 `children`，即可实现组头拖拽时整组移动：
+
+**TypeScript 写法：**
+
+```vue
+<script setup lang="ts">
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+import type { TableColumnOption } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
+
+const configurableColumns: TableColumnOption[] = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    {
+        groupKey: 'purchasePlan',
+        label: '采购计划',
+        color: '#005bf5',
+        children: [
+            { key: 'qty', label: '数量' },
+            { key: 'budget', label: '预算(元)' }
+        ]
+    },
+    {
+        groupKey: 'purchaseOrder',
+        label: '采购单',
+        color: '#f58718',
+        children: [
+            { key: 'owner', label: '负责人' },
+            { key: 'expectDate', label: '期望到货' }
+        ]
+    },
+    { key: 'status', label: '状态' }
+];
+
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
+</script>
+
+<template>
+    <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+
+    <div style="position: relative">
+        <TableGroupHeader :groups="headerGroups" :columns="orderedVisibleColumns" />
+        <a-table ...>
+            <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :data-index="col.key" :fixed="col.fixed || undefined" />
+        </a-table>
+    </div>
+</template>
+```
+
+**非 TypeScript 写法：**
+
+```vue
+<script setup>
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+
+const configurableColumns = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    {
+        groupKey: 'purchasePlan',
+        label: '采购计划',
+        color: '#005bf5',
+        children: [
+            { key: 'qty', label: '数量' },
+            { key: 'budget', label: '预算(元)' }
+        ]
+    },
+    {
+        groupKey: 'purchaseOrder',
+        label: '采购单',
+        color: '#f58718',
+        children: [
+            { key: 'owner', label: '负责人' },
+            { key: 'expectDate', label: '期望到货' }
+        ]
+    },
+    { key: 'status', label: '状态' }
+];
+
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
+</script>
+
+<template>
+    <TableColumnConfigDrawer ref="columnConfigRef" :options="configurableColumns" />
+
+    <div style="position: relative">
+        <TableGroupHeader :groups="headerGroups" :columns="orderedVisibleColumns" />
+        <a-table ...>
+            <a-table-column v-for="col in orderedVisibleColumns" :key="col.key" :title="col.label" :data-index="col.key" :fixed="col.fixed || undefined" />
+        </a-table>
+    </div>
+</template>
+```
+
+如果表格有配置列之前的固定列（如 checkbox 列），需传 `leading-column-count`：
+
+```html
+<TableGroupHeader :groups="headerGroups" :columns="orderedVisibleColumns" :leading-column-count="1" />
+```
+
+---
+
+## 2. 类型定义
+
+### TableColumnItem（叶子列）
 
 ```ts
-interface TableColumnOption {
-  key: string;       // 列唯一标识
-  label: string;     // 列显示名称
-  disabled?: boolean; // 是否禁用勾选（可选）
+interface TableColumnItem {
+    key: string;
+    label: string;
+    disabled?: boolean;
 }
 ```
 
-`orderedVisibleColumns` 中每项的扩展类型：
+### TableColumnGroup（分组）
 
 ```ts
-interface VisibleColumn extends TableColumnOption {
-  fixed?: 'left' | 'right';  // 不设置或 undefined 表示不固定
+interface TableColumnGroup {
+    groupKey: string; // 组唯一标识
+    label: string; // 组名称（显示在组头 checkbox 和 TableGroupHeader 标签上）
+    color: string; // 组颜色（用于 TableGroupHeader 线/标签渲染）
+    children: TableColumnItem[]; // 组内子列
+}
+```
+
+### TableColumnOption（联合类型）
+
+```ts
+type TableColumnOption = TableColumnItem | TableColumnGroup;
+```
+
+### VisibleColumn（输出类型）
+
+```ts
+interface VisibleColumn extends TableColumnItem {
+    fixed?: 'left' | 'right';
+    groupKey?: string; // 所属组标识（有值表示该列属于某个分组）
+    groupLabel?: string; // 所属组名称
+    groupColor?: string; // 所属组颜色
 }
 ```
 
 ---
 
-## 3. Props
+## 3. useColumnConfig 返回值
 
-| 名称 | 类型 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `options` | `TableColumnOption[]` | 是 | - | 可配置列项 |
-| `title` | `string` | 否 | `列配置` | 抽屉标题 |
-| `triggerText` | `string` | 否 | `列配置` | 触发按钮文字 |
-| `width` | `number` | 否 | `700` | 抽屉宽度 |
-
----
-
-## 4. 固定列交互说明
-
-在"已选列"列表中，每项右侧有一个图钉按钮：
-
-- 点击一次：固定到左侧（显示蓝色左边框 + "左" 标签）
-- 再点一次：切换为固定到右侧（显示绿色右边框 + "右" 标签）
-- 再点一次：取消固定
-
-固定状态通过 `orderedVisibleColumns` 中的 `fixed` 字段传递，绑定到 `<a-table-column :fixed="col.fixed">` 即可生效。
+| 名称                    | 类型                                                                | 说明                                                   |
+| ----------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| `columnConfigRef`       | `Ref<InstanceType<typeof TableColumnConfigDrawer>>`                 | 绑定到组件的模板 ref                                   |
+| `orderedVisibleColumns` | `ComputedRef<VisibleColumn[]>`                                      | 当前可见且排好序的列（平面列表，可直接 v-for）         |
+| `headerGroups`          | `ComputedRef<{ groupKey: string; label: string; color: string }[]>` | 从 options 中提取的分组定义，直接传给 TableGroupHeader |
 
 ---
 
-## 5. 推荐实践
+## 4. Props
 
-- `options` 的 `key` 要稳定且唯一，不要用会变化的值。
-- 若页面存在"合并单元格"，列数相关逻辑需要跟随可见列动态计算（如 `tableColumnCount = orderedVisibleColumns.length + 固定列数`）。
-
----
-
-## 6. 常见问题
-
-### Q1：隐藏生效了，但拖拽排序不生效？
-
-通常是因为表格列仍按原始 `configurableColumns` 顺序渲染，请改为按 `orderedVisibleColumns` 顺序渲染。
-
-### Q2：固定列不生效？
-
-需要将 `col.fixed` 传给 `<a-table-column :fixed="col.fixed || undefined">`，否则 Arco Table 不知道哪些列需要固定。
-
-### Q3：为什么最少要保留一列？
-
-组件内部限制不能把所有业务列都隐藏，避免页面不可用。
+| 名称          | 类型                  | 必填 | 默认值   | 说明                               |
+| ------------- | --------------------- | ---- | -------- | ---------------------------------- |
+| `options`     | `TableColumnOption[]` | 是   | -        | 可配置列项，支持平面列和分组列混合 |
+| `title`       | `string`              | 否   | `列配置` | 抽屉标题                           |
+| `triggerText` | `string`              | 否   | `列配置` | 触发按钮文字                       |
+| `width`       | `number`              | 否   | `700`    | 抽屉宽度                           |
 
 ---
 
-## 7. 在其他项目复用
+## 5. 分组交互说明
 
-复制以下三个文件到目标项目同级目录：
+### 左侧"全部列"面板
+
+- 分组显示为**组头 checkbox**（带颜色圆点）+ 缩进的子列 checkbox
+- 勾选组头 → 整组全选；取消组头 → 整组全取消
+- 部分子列选中时组头显示 indeterminate 状态
+
+### 右侧"已选列"面板
+
+- **组头行**：可拖拽、可固定，显示组名 + 颜色圆点 + 子列数量
+- **子列行**：不可单独拖拽或固定，缩进显示在组头下方
+- 拖拽组头 → 整组（含所有子列）一起移动
+- 固定组头 → 整组一起固定到左/右侧
+
+### 无分组列
+
+行为与之前完全一致：可单独拖拽、可单独固定。
+
+---
+
+## 6. 固定列交互
+
+点击图钉按钮循环切换：不固定 → 左侧 → 右侧 → 不固定。
+
+- 分组列：点击组头的图钉，整组一起切换固定状态
+- 平面列：点击单列的图钉，仅该列切换
+
+---
+
+## 7. 复用到其他 Vue 3 项目
+
+### 7.1 需要复制的文件
 
 - `TableColumnConfigDrawer.vue`
 - `useColumnConfig.ts`
 - `TableColumnConfigDrawer.md`
 
-然后按"2.1 最简用法"进行使用。
+### 7.2 环境要求
+
+组件内部使用了 `lang="ts"`，需要构建工具支持 TypeScript 编译。
+
+**判断方式：** 查看目标项目 `package.json` 的 `devDependencies` 里是否有 `typescript`。
+
+- **有** — 直接复制使用，无需额外操作
+- **没有** — 执行以下命令安装（仅构建时依赖，不影响你写 JS）：
+
+```bash
+npm install -D typescript
+```
+
+Vite 原生支持 `.vue` 文件里的 `lang="ts"`，即使你项目其他文件都是 `.js`，也会自动编译。
+
+### 7.3 非 TypeScript 项目的写法
+
+如果你的页面不使用 TypeScript，只需去掉 `import type` 和类型标注即可，组件本身不需要改动：
+
+```vue
+<script setup>
+import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
+import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
+
+// 不需要 import type，不需要 : TableColumnOption[] 类型标注
+const configurableColumns = [
+    { key: 'no', label: '计划编号' },
+    { key: 'dept', label: '申请部门' },
+    {
+        groupKey: 'purchasePlan',
+        label: '采购计划',
+        color: '#005bf5',
+        children: [
+            { key: 'qty', label: '数量' },
+            { key: 'budget', label: '预算(元)' }
+        ]
+    },
+    { key: 'status', label: '状态' }
+];
+
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
+</script>
+```
+
+### 7.4 依赖
+
+- Vue 3（`<script setup>`）
+- Arco Design Vue（`a-drawer`、`a-checkbox`、`a-button` 等组件 + 图标）

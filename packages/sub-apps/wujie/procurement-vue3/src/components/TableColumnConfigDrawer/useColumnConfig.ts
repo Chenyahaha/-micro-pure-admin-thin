@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue';
 import TableColumnConfigDrawer from './TableColumnConfigDrawer.vue';
-import type { TableColumnOption, VisibleColumn } from './TableColumnConfigDrawer.vue';
+import type { TableColumnOption, TableColumnGroup, VisibleColumn } from './TableColumnConfigDrawer.vue';
 
 function flattenWithOptions(options: TableColumnOption[]): VisibleColumn[] {
     const result: VisibleColumn[] = [];
@@ -22,10 +22,17 @@ function flattenWithOptions(options: TableColumnOption[]): VisibleColumn[] {
     return result;
 }
 
+function extractHeaderGroups(options: TableColumnOption[]) {
+    return options
+        .filter((opt): opt is TableColumnGroup => 'children' in opt && Array.isArray(opt.children))
+        .map(g => ({ groupKey: g.groupKey, label: g.label, color: g.color }));
+}
+
 export function useColumnConfig(options: TableColumnOption[]) {
     const columnConfigRef = ref<InstanceType<typeof TableColumnConfigDrawer>>();
     const orderedVisibleColumns = computed(() =>
         columnConfigRef.value?.orderedVisibleColumns ?? flattenWithOptions(options)
     );
-    return { columnConfigRef, orderedVisibleColumns };
+    const headerGroups = computed(() => extractHeaderGroups(options));
+    return { columnConfigRef, orderedVisibleColumns, headerGroups };
 }

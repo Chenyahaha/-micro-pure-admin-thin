@@ -8,11 +8,7 @@ import PurchasePlanForm from './form.vue';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
-import type { TableColumnOption, TableColumnGroup } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
-
-function isGroupOption(opt: TableColumnOption): opt is TableColumnGroup {
-    return 'children' in opt && Array.isArray(opt.children);
-}
+import type { TableColumnOption } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 
 const { tableData, filteredData, searchKeyword, searchStatus, modalVisible, modalMode, formData, handleAdd, handleEdit, handleDelete, handleSave } = useCrud();
 
@@ -71,13 +67,7 @@ const configurableColumns: TableColumnOption[] = [
     { key: 'status', label: '状态' }
 ];
 
-const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
-
-const headerGroups = computed(() =>
-    configurableColumns
-        .filter(isGroupOption)
-        .map(g => ({ groupKey: g.groupKey, label: g.label, color: g.color }))
-);
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
 
 onMounted(() => {
     if (!tableAreaRef.value) return;

@@ -7,11 +7,7 @@ import { payStatusOptions } from './config';
 import PurchaseOrderForm from './form.vue';
 import TableColumnConfigDrawer from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import { useColumnConfig } from '../components/TableColumnConfigDrawer/useColumnConfig';
-import type { TableColumnOption, TableColumnGroup } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
-
-function isGroupOption(opt: TableColumnOption): opt is TableColumnGroup {
-    return 'children' in opt && Array.isArray(opt.children);
-}
+import type { TableColumnOption } from '../components/TableColumnConfigDrawer/TableColumnConfigDrawer.vue';
 import type { PurchaseOrderTableRow } from './data';
 import { flattenBatches, sumQty, sumAmount } from './data';
 import TableGroupHeader from '../components/TableGroupHeader/TableGroupHeader.vue';
@@ -80,13 +76,7 @@ const configurableColumns: TableColumnOption[] = [
     { key: 'payStatus', label: '付款状态' }
 ];
 
-const headerGroups = computed(() =>
-    configurableColumns
-        .filter(isGroupOption)
-        .map(g => ({ groupKey: g.groupKey, label: g.label, color: g.color }))
-);
-
-const { columnConfigRef, orderedVisibleColumns } = useColumnConfig(configurableColumns);
+const { columnConfigRef, orderedVisibleColumns, headerGroups } = useColumnConfig(configurableColumns);
 const tableColumnCount = computed(() => orderedVisibleColumns.value.length + 2);
 
 function spanMethod({ record, columnIndex }: { record: Record<string, unknown>; columnIndex: number }) {
