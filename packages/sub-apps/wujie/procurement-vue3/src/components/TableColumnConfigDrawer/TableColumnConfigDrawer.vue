@@ -60,6 +60,10 @@ const flatOptions = computed<TableColumnItem[]>(() => {
     return result;
 });
 
+const ungroupedOptions = computed<TableColumnItem[]>(() =>
+    props.options.filter((opt): opt is TableColumnItem => !isGroupOption(opt))
+);
+
 const keyToGroup = computed(() => {
     const map = new Map<string, { groupKey: string; label: string; color: string }>();
     for (const opt of props.options) {
@@ -168,6 +172,27 @@ function toggleGroup(groupKey: string, checked: boolean | (string | number | boo
     }
 }
 
+function isUngroupedSelected(): boolean {
+    const items = ungroupedOptions.value;
+    if (items.length === 0) return false;
+    return items.every(c => isSelected(c.key));
+}
+
+function isUngroupedIndeterminate(): boolean {
+    const items = ungroupedOptions.value;
+    if (items.length === 0) return false;
+    const selected = items.filter(c => isSelected(c.key));
+    return selected.length > 0 && selected.length < items.length;
+}
+
+function toggleUngrouped(checked: boolean | (string | number | boolean)[]) {
+    if (Array.isArray(checked)) return;
+    for (const item of ungroupedOptions.value) {
+        if (item.disabled) continue;
+        toggleOption(item.key, checked);
+    }
+}
+
 interface RenderItem {
     type: 'group-header' | 'group-child' | 'item';
     key: string;
@@ -175,11 +200,15 @@ interface RenderItem {
     option?: TableColumnItem;
     groupDef?: TableColumnGroup;
     fixed?: 'left' | 'right';
+    logicalIndex?: number;
+    childIndex?: number;
 }
 
 const renderItems = computed<RenderItem[]>(() => {
     const items: RenderItem[] = [];
     let currentGroupKey: string | undefined;
+    let pos = 0;
+    let childPos = 0;
 
     for (const draftItem of draft.value) {
         const groupInfo = keyToGroup.value.get(draftItem.key);
@@ -189,30 +218,38 @@ const renderItems = computed<RenderItem[]>(() => {
                 const groupDef = groups.value.find(g => g.groupKey === groupInfo.groupKey)!;
                 const hasVisibleChildren = groupDef.children.some(c => draft.value.some(d => d.key === c.key));
                 if (hasVisibleChildren) {
+                    pos++;
                     items.push({
                         type: 'group-header',
                         key: groupInfo.groupKey,
                         groupKey: groupInfo.groupKey,
                         groupDef,
-                        fixed: draftItem.fixed
+                        fixed: draftItem.fixed,
+                        logicalIndex: pos
                     });
+                    childPos = 0;
                 }
                 currentGroupKey = groupInfo.groupKey;
             }
+            childPos++;
             items.push({
                 type: 'group-child',
                 key: draftItem.key,
                 groupKey: currentGroupKey,
                 option: flatOptions.value.find(o => o.key === draftItem.key),
-                fixed: draftItem.fixed
+                fixed: draftItem.fixed,
+                logicalIndex: pos,
+                childIndex: childPos
             });
         } else {
             currentGroupKey = undefined;
+            pos++;
             items.push({
                 type: 'item',
                 key: draftItem.key,
                 option: flatOptions.value.find(o => o.key === draftItem.key),
-                fixed: draftItem.fixed
+                fixed: draftItem.fixed,
+                logicalIndex: pos
             });
         }
     }
@@ -291,6 +328,29 @@ function onDragStart(key: string) {
 function onDrop(targetKey: string) {
     const sourceKey = draggingKey.value;
     const sourceIsGroup = groups.value.some(g => g.groupKey === sourceKey);
+    const sourceGroupKey = keyToGroup.value.get(sourceKey)?.groupKey;
+
+    // If dragging a group child within its group, reorder within the group
+    if (!sourceIsGroup && sourceGroupKey) {
+        const targetGroupKey = keyToGroup.value.get(targetKey)?.groupKey;
+        const targetIsGroupHeader = groups.value.some(g => g.groupKey === targetKey);
+        // Only allow drop within the same group
+        if (targetGroupKey === sourceGroupKey && !targetIsGroupHeader) {
+            const from = draft.value.findIndex(item => item.key === sourceKey);
+            const to = draft.value.findIndex(item => item.key === targetKey);
+            if (from < 0 || to < 0 || from === to) { dragOverKey.value = ''; return; }
+            const next = [...draft.value];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            draft.value = next;
+            dragOverKey.value = '';
+            return;
+        }
+        // Drop on own group header or outside group — ignore
+        dragOverKey.value = '';
+        return;
+    }
+
     const sourceKeys = sourceIsGroup ? getGroupKeys(sourceKey) : [sourceKey];
 
     // Find the target position: if target is a group header, use its first child's position
@@ -340,37 +400,52 @@ function onDrop(targetKey: string) {
                 <div class="column-config-box">
                     <div class="column-config-box-title">全部列</div>
                     <div class="column-config-list">
-                        <template v-for="opt in options" :key="isGroupOption(opt) ? opt.groupKey : opt.key">
-                            <template v-if="isGroupOption(opt)">
-                                <div class="group-checkbox-row">
-                                    <a-checkbox
-                                        :model-value="isGroupSelected(opt.groupKey)"
-                                        :indeterminate="isGroupIndeterminate(opt.groupKey)"
-                                        :disabled="opt.children.every(c => c.disabled)"
-                                        @change="val => toggleGroup(opt.groupKey, val)"
-                                    >
-                                        <span class="group-dot" :style="{ background: opt.color }"></span>
-                                        {{ opt.label }}
-                                    </a-checkbox>
-                                </div>
+                        <!-- 基础信息：所有无分组列归到一起 -->
+                        <template v-if="ungroupedOptions.length > 0">
+                            <div class="group-checkbox-row">
                                 <a-checkbox
-                                    v-for="child in opt.children"
-                                    :key="child.key"
-                                    :model-value="isSelected(child.key)"
-                                    :disabled="child.disabled"
-                                    class="group-child-checkbox"
-                                    @change="val => toggleOption(child.key, val)"
+                                    :model-value="isUngroupedSelected()"
+                                    :indeterminate="isUngroupedIndeterminate()"
+                                    :disabled="ungroupedOptions.every(c => c.disabled)"
+                                    @change="val => toggleUngrouped(val)"
                                 >
-                                    {{ child.label }}
+                                    基础信息
                                 </a-checkbox>
-                            </template>
+                            </div>
                             <a-checkbox
-                                v-else
-                                :model-value="isSelected(opt.key)"
-                                :disabled="opt.disabled"
-                                @change="val => toggleOption(opt.key, val)"
+                                v-for="item in ungroupedOptions"
+                                :key="item.key"
+                                :model-value="isSelected(item.key)"
+                                :disabled="item.disabled"
+                                class="group-child-checkbox"
+                                @change="val => toggleOption(item.key, val)"
                             >
-                                {{ opt.label }}
+                                {{ item.label }}
+                            </a-checkbox>
+                        </template>
+
+                        <!-- 分组列 -->
+                        <template v-for="opt in groups" :key="opt.groupKey">
+                            <div class="group-checkbox-row group-section-gap">
+                                <a-checkbox
+                                    :model-value="isGroupSelected(opt.groupKey)"
+                                    :indeterminate="isGroupIndeterminate(opt.groupKey)"
+                                    :disabled="opt.children.every(c => c.disabled)"
+                                    @change="val => toggleGroup(opt.groupKey, val)"
+                                >
+                                    <span class="group-dot" :style="{ background: opt.color }"></span>
+                                    {{ opt.label }}
+                                </a-checkbox>
+                            </div>
+                            <a-checkbox
+                                v-for="child in opt.children"
+                                :key="child.key"
+                                :model-value="isSelected(child.key)"
+                                :disabled="child.disabled"
+                                class="group-child-checkbox"
+                                @change="val => toggleOption(child.key, val)"
+                            >
+                                {{ child.label }}
                             </a-checkbox>
                         </template>
                     </div>
@@ -379,7 +454,7 @@ function onDrop(targetKey: string) {
                 <div class="column-config-box">
                     <div class="column-config-box-title">已选列（拖拽排序，点击图钉固定）</div>
                     <div class="selected-list">
-                        <template v-for="(item, index) in renderItems" :key="item.key + '-' + item.type">
+                        <template v-for="item in renderItems" :key="item.key + '-' + item.type">
                             <!-- Group header: draggable -->
                             <div
                                 v-if="item.type === 'group-header'"
@@ -397,6 +472,7 @@ function onDrop(targetKey: string) {
                                 @drop.prevent="onDrop(item.key)"
                             >
                                 <span class="drag-handle" aria-hidden="true"></span>
+                                <span class="selected-index">{{ item.logicalIndex }}</span>
                                 <span class="group-dot" :style="{ background: item.groupDef!.color }"></span>
                                 <span class="selected-label group-label">{{ item.groupDef!.label }}</span>
                                 <span class="group-child-count">{{ item.groupDef!.children.length }}列</span>
@@ -411,16 +487,25 @@ function onDrop(targetKey: string) {
                                 </span>
                             </div>
 
-                            <!-- Group child: not individually draggable -->
+                            <!-- Group child: draggable within group only -->
                             <div
                                 v-else-if="item.type === 'group-child'"
                                 class="selected-item group-child-item"
                                 :class="{
+                                    'is-drag-over': dragOverKey === item.key && keyToGroup.get(draggingKey)?.groupKey === item.groupKey,
                                     'is-fixed-left': item.fixed === 'left',
                                     'is-fixed-right': item.fixed === 'right'
                                 }"
+                                draggable="true"
+                                @dragstart="onDragStart(item.key)"
+                                @dragenter.prevent="dragOverKey = item.key"
+                                @dragleave.prevent="dragOverKey = ''"
+                                @dragover.prevent
+                                @drop.prevent="onDrop(item.key)"
                             >
                                 <span class="child-indent"></span>
+                                <span class="drag-handle child-drag-handle" aria-hidden="true"></span>
+                                <span class="selected-index child-index">{{ item.logicalIndex }}.{{ item.childIndex }}</span>
                                 <span class="selected-label">{{ item.option!.label }}</span>
                             </div>
 
@@ -441,7 +526,7 @@ function onDrop(targetKey: string) {
                                 @drop.prevent="onDrop(item.key)"
                             >
                                 <span class="drag-handle" aria-hidden="true"></span>
-                                <span class="selected-index">{{ index + 1 }}</span>
+                                <span class="selected-index">{{ item.logicalIndex }}</span>
                                 <span class="selected-label">{{ item.option!.label }}</span>
                                 <a-tooltip :content="!item.fixed ? '固定到左侧' : item.fixed === 'left' ? '固定到右侧' : '取消固定'">
                                     <span class="pin-btn" :class="{ 'is-active': !!item.fixed }" @click.stop="cycleFixed(item.key)">
@@ -547,6 +632,12 @@ function onDrop(targetKey: string) {
     gap: 6px;
     padding: 4px 0 2px;
     font-weight: 600;
+    font-size: 13px;
+    color: var(--color-text-2);
+}
+
+.group-section-gap {
+    margin-top: 14px;
 }
 
 .group-dot {
@@ -639,6 +730,23 @@ function onDrop(targetKey: string) {
 .child-indent {
     width: 16px;
     flex-shrink: 0;
+}
+
+.child-drag-handle {
+    width: 8px;
+    height: 10px;
+    opacity: 0.4;
+}
+
+.group-child-item:hover .child-drag-handle {
+    opacity: 0.8;
+}
+
+.child-index {
+    font-size: 10px;
+    min-width: 24px;
+    background: var(--color-fill-2);
+    color: var(--color-text-4);
 }
 
 .unfix-btn {
